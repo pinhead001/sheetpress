@@ -1,0 +1,10 @@
+services:
+  sheetpress:
+    build: .
+    image: sheetpress:latest
+    volumes:
+      # Mount your local PDF folders - edit these paths
+      - ./input:/data/input
+      - ./output:/data/output
+    # Default: compress all PDFs in /data/input, write to /data/output
+    command: ["/data/input", "-o", "/data/output/combined_compressed.pdf", "--dpi", "200", "--quality", "ebook"]

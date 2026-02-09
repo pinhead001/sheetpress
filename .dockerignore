@@ -1,0 +1,11 @@
+.git
+.github
+*.pdf
+input/
+output/
+tests/
+README.md
+LICENSE
+.gitignore
+__pycache__
+*.pyc

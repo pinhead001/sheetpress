@@ -1,0 +1,19 @@
+# PDFs (don't commit large test files)
+*.pdf
+input/
+output/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
