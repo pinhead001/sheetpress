@@ -15,7 +15,7 @@ Uses Ghostscript to aggressively downsample raster content while preserving vect
 ### Step 1: Clone the repo
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/sheetpress.git
+git clone https://github.com/pinhead001/sheetpress.git
 cd sheetpress
 ```
 
