@@ -16,7 +16,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from pypdf import PdfWriter
+from pypdf import PdfReader, PdfWriter
 
 
 # Ghostscript quality presets (maps to -dPDFSETTINGS)
@@ -106,8 +106,8 @@ def combine_pdfs(pdf_paths: list[Path], output_path: Path,
     """Combine PDFs into one or more output files.
 
     If max_size_mb is set, splits into multiple files so each part stays
-    under the size limit.  Splitting is done at file boundaries to keep
-    individual sheets intact.
+    under the size limit.  Splitting is done at page boundaries using
+    per-page size estimates (source file size / page count).
 
     Returns list of output file paths created.
     """
@@ -121,20 +121,32 @@ def combine_pdfs(pdf_paths: list[Path], output_path: Path,
 
     max_size_bytes = int(max_size_mb * 1024 * 1024)
 
-    # Group PDFs into parts based on cumulative file size
-    parts: list[list[Path]] = []
-    current_part: list[Path] = []
+    # Read all pages and estimate per-page size from each source file
+    pages_with_sizes: list[tuple] = []
+    for pdf_path in pdf_paths:
+        file_bytes = pdf_path.stat().st_size
+        reader = PdfReader(str(pdf_path))
+        n_pages = len(reader.pages)
+        est_page_bytes = file_bytes / n_pages if n_pages else 0
+        for page in reader.pages:
+            pages_with_sizes.append((page, est_page_bytes))
+
+    if not pages_with_sizes:
+        return []
+
+    # Group pages into parts based on estimated cumulative size
+    parts: list[list] = []
+    current_part: list = []
     current_size = 0
 
-    for pdf in pdf_paths:
-        pdf_size = pdf.stat().st_size
-        if current_part and current_size + pdf_size > max_size_bytes:
+    for page, est_bytes in pages_with_sizes:
+        if current_part and current_size + est_bytes > max_size_bytes:
             parts.append(current_part)
-            current_part = [pdf]
-            current_size = pdf_size
+            current_part = [(page, est_bytes)]
+            current_size = est_bytes
         else:
-            current_part.append(pdf)
-            current_size += pdf_size
+            current_part.append((page, est_bytes))
+            current_size += est_bytes
 
     if current_part:
         parts.append(current_part)
@@ -145,10 +157,10 @@ def combine_pdfs(pdf_paths: list[Path], output_path: Path,
     parent = output_path.parent
     output_files: list[Path] = []
 
-    for i, part_pdfs in enumerate(parts, 1):
+    for i, part_pages in enumerate(parts, 1):
         writer = PdfWriter()
-        for pdf in part_pdfs:
-            writer.append(str(pdf))
+        for page, _ in part_pages:
+            writer.add_page(page)
 
         if len(parts) == 1:
             part_path = output_path
