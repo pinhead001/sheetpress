@@ -2,7 +2,7 @@
 
 Compresses and combines Civil3D sheet set PDFs into a single optimized file. Designed specifically for sheets containing cut/fill heat ramps, elevation banding, and slope analysis surfaces that produce oversized PDFs.
 
-Uses Ghostscript to aggressively downsample raster content (heat ramps) while preserving vector linework and text quality.
+Uses Ghostscript to aggressively downsample raster content while preserving vector linework and text quality.
 
 ---
 
