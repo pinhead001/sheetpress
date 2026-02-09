@@ -12,6 +12,7 @@ Usage:
 """
 
 import argparse
+import io
 import subprocess
 import sys
 import tempfile
@@ -106,8 +107,8 @@ def combine_pdfs(pdf_paths: list[Path], output_path: Path,
     """Combine PDFs into one or more output files.
 
     If max_size_mb is set, splits into multiple files so each part stays
-    under the size limit.  Splitting is done at page boundaries using
-    per-page size estimates (source file size / page count).
+    under the size limit.  Pages are added one at a time and the actual
+    output size is measured to decide where to split.
 
     Returns list of output file paths created.
     """
@@ -121,55 +122,65 @@ def combine_pdfs(pdf_paths: list[Path], output_path: Path,
 
     max_size_bytes = int(max_size_mb * 1024 * 1024)
 
-    # Read all pages and estimate per-page size from each source file
-    pages_with_sizes: list[tuple] = []
+    # Read all pages from all input PDFs
+    all_pages = []
     for pdf_path in pdf_paths:
-        file_bytes = pdf_path.stat().st_size
         reader = PdfReader(str(pdf_path))
-        n_pages = len(reader.pages)
-        est_page_bytes = file_bytes / n_pages if n_pages else 0
         for page in reader.pages:
-            pages_with_sizes.append((page, est_page_bytes))
+            all_pages.append(page)
 
-    if not pages_with_sizes:
+    if not all_pages:
         return []
 
-    # Group pages into parts based on estimated cumulative size
-    parts: list[list] = []
-    current_part: list = []
-    current_size = 0
-
-    for page, est_bytes in pages_with_sizes:
-        if current_part and current_size + est_bytes > max_size_bytes:
-            parts.append(current_part)
-            current_part = [(page, est_bytes)]
-            current_size = est_bytes
-        else:
-            current_part.append((page, est_bytes))
-            current_size += est_bytes
-
-    if current_part:
-        parts.append(current_part)
-
-    # Build each part
     stem = output_path.stem
     suffix = output_path.suffix
     parent = output_path.parent
     output_files: list[Path] = []
+    part_num = 1
+    start = 0
 
-    for i, part_pages in enumerate(parts, 1):
+    while start < len(all_pages):
         writer = PdfWriter()
-        for page, _ in part_pages:
-            writer.add_page(page)
+        end = start
 
-        if len(parts) == 1:
+        for idx in range(start, len(all_pages)):
+            writer.add_page(all_pages[idx])
+
+            # Measure actual combined size in memory
+            buf = io.BytesIO()
+            writer.write(buf)
+            actual_size = buf.tell()
+
+            if actual_size > max_size_bytes:
+                if idx == start:
+                    # Single page exceeds limit — include it anyway
+                    end = idx + 1
+                else:
+                    # This page pushed us over; rebuild without it
+                    end = idx
+                    writer = PdfWriter()
+                    for i in range(start, end):
+                        writer.add_page(all_pages[i])
+                break
+
+            end = idx + 1
+        else:
+            # All remaining pages fit
+            end = len(all_pages)
+
+        # Determine output filename
+        if part_num == 1 and end >= len(all_pages):
             part_path = output_path
         else:
-            part_path = parent / f"{stem}_part{i}{suffix}"
+            part_path = parent / f"{stem}_part{part_num}{suffix}"
 
         with open(part_path, "wb") as f:
             writer.write(f)
         output_files.append(part_path)
+        print(f"  {part_path.name} — {end - start} pages, {get_file_size_mb(part_path):.1f} MB")
+
+        start = end
+        part_num += 1
 
     return output_files
 
