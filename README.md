@@ -131,34 +131,6 @@ sheetpress/
 └── README.md
 ```
 
----
-
-## GitHub Setup
-
-### Initialize and push to a new repo
-
-```bash
-# From the sheetpress/ directory
-git init
-git add .
-git commit -m "Initial commit: PDF compressor for Civil3D sheet sets"
-
-# Create repo on GitHub first, then:
-git remote add origin https://github.com/YOUR_USERNAME/sheetpress.git
-git branch -M main
-git push -u origin main
-```
-
-### Track changes
-
-```bash
-# After making edits
-git add -A
-git commit -m "description of changes"
-git push
-```
-
----
 
 ## Troubleshooting
 
