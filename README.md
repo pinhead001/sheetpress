@@ -87,6 +87,9 @@ python compress_combine_pdfs.py C-101.pdf C-102.pdf C-103.pdf -o package.pdf
 
 # Just combine, no compression
 python compress_combine_pdfs.py sheets/ -o combined.pdf --no-compress
+
+# Split output into files no larger than 100 MB each
+python compress_combine_pdfs.py sheets/ -o package.pdf --max-size 100
 ```
 
 ---
@@ -108,6 +111,7 @@ python compress_combine_pdfs.py sheets/ -o combined.pdf --no-compress
 | Client review draft        | `--quality ebook --dpi 150`                      |
 | Regulatory submittal       | `--quality printer --dpi 300`                    |
 | Email attachment (<10 MB)  | `--quality screen --dpi 100`                     |
+| Upload portal (100 MB cap) | `--quality printer --dpi 300 --max-size 100`     |
 | Internal QC                | `--quality ebook --dpi 200` (default)            |
 
 ---
@@ -162,6 +166,6 @@ git push
 |-------|-----|
 | Ghostscript not found (Docker) | Rebuild image: `docker build --no-cache -t sheetpress .` |
 | Ghostscript not found (local) | Install: `apt install ghostscript` / `choco install ghostscript` |
-| Output still too large | Try `--quality screen --dpi 100` or reduce analysis ranges in Civil3D |
+| Output still too large | Try `--quality screen --dpi 100`, use `--max-size 100` to split, or reduce analysis ranges in Civil3D |
 | Blank/corrupted pages | Ensure Civil3D published with "AutoCAD PDF" plotter, not Adobe |
 | Permission denied (Docker) | Check volume mount paths match your OS syntax |

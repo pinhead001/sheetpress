@@ -101,6 +101,67 @@ def collect_pdfs(inputs: list[str]) -> list[Path]:
     return pdfs
 
 
+def combine_pdfs(pdf_paths: list[Path], output_path: Path,
+                 max_size_mb: float | None = None) -> list[Path]:
+    """Combine PDFs into one or more output files.
+
+    If max_size_mb is set, splits into multiple files so each part stays
+    under the size limit.  Splitting is done at file boundaries to keep
+    individual sheets intact.
+
+    Returns list of output file paths created.
+    """
+    if max_size_mb is None:
+        writer = PdfWriter()
+        for pdf in pdf_paths:
+            writer.append(str(pdf))
+        with open(output_path, "wb") as f:
+            writer.write(f)
+        return [output_path]
+
+    max_size_bytes = int(max_size_mb * 1024 * 1024)
+
+    # Group PDFs into parts based on cumulative file size
+    parts: list[list[Path]] = []
+    current_part: list[Path] = []
+    current_size = 0
+
+    for pdf in pdf_paths:
+        pdf_size = pdf.stat().st_size
+        if current_part and current_size + pdf_size > max_size_bytes:
+            parts.append(current_part)
+            current_part = [pdf]
+            current_size = pdf_size
+        else:
+            current_part.append(pdf)
+            current_size += pdf_size
+
+    if current_part:
+        parts.append(current_part)
+
+    # Build each part
+    stem = output_path.stem
+    suffix = output_path.suffix
+    parent = output_path.parent
+    output_files: list[Path] = []
+
+    for i, part_pdfs in enumerate(parts, 1):
+        writer = PdfWriter()
+        for pdf in part_pdfs:
+            writer.append(str(pdf))
+
+        if len(parts) == 1:
+            part_path = output_path
+        else:
+            part_path = parent / f"{stem}_part{i}{suffix}"
+
+        with open(part_path, "wb") as f:
+            writer.write(f)
+        output_files.append(part_path)
+
+    return output_files
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Compress and combine Civil3D sheet set PDFs"
@@ -124,6 +185,10 @@ def main():
     parser.add_argument(
         "--no-compress", action="store_true",
         help="Skip compression, just combine PDFs"
+    )
+    parser.add_argument(
+        "--max-size", type=float, default=None, metavar="MB",
+        help="Max output file size in MB; splits into multiple files if needed (e.g. --max-size 100)"
     )
 
     args = parser.parse_args()
@@ -171,22 +236,31 @@ def main():
             else:
                 compressed_pdfs.append(pdf)
 
-        # Combine all PDFs
-        print(f"\nCombining {len(compressed_pdfs)} PDFs into {output_path}...")
-        writer = PdfWriter()
-        for pdf in compressed_pdfs:
-            writer.append(str(pdf))
+        # Combine (and optionally split)
+        if args.max_size:
+            print(f"\nCombining {len(compressed_pdfs)} PDFs (max {args.max_size} MB per file)...")
+        else:
+            print(f"\nCombining {len(compressed_pdfs)} PDFs into {output_path}...")
 
-        with open(output_path, "wb") as f:
-            writer.write(f)
+        output_files = combine_pdfs(compressed_pdfs, output_path, args.max_size)
 
     # Summary
-    final_size = get_file_size_mb(output_path)
-    total_reduction = (1 - final_size / total_input_mb) * 100 if total_input_mb > 0 else 0
-    print(f"\nDone!")
-    print(f"  Input:  {total_input_mb:.2f} MB ({len(pdfs)} files)")
-    print(f"  Output: {final_size:.2f} MB → {output_path}")
-    print(f"  Total reduction: {total_reduction:.0f}%")
+    if len(output_files) == 1:
+        final_size = get_file_size_mb(output_files[0])
+        total_reduction = (1 - final_size / total_input_mb) * 100 if total_input_mb > 0 else 0
+        print(f"\nDone!")
+        print(f"  Input:  {total_input_mb:.2f} MB ({len(pdfs)} files)")
+        print(f"  Output: {final_size:.2f} MB → {output_files[0]}")
+        print(f"  Total reduction: {total_reduction:.0f}%")
+    else:
+        total_output_mb = sum(get_file_size_mb(f) for f in output_files)
+        total_reduction = (1 - total_output_mb / total_input_mb) * 100 if total_input_mb > 0 else 0
+        print(f"\nDone! Split into {len(output_files)} files:")
+        print(f"  Input:  {total_input_mb:.2f} MB ({len(pdfs)} files)")
+        for f in output_files:
+            print(f"    {f.name:40s}  {get_file_size_mb(f):8.2f} MB")
+        print(f"  Total output: {total_output_mb:.2f} MB")
+        print(f"  Total reduction: {total_reduction:.0f}%")
 
 
 if __name__ == "__main__":
