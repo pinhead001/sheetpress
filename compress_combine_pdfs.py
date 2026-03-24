@@ -260,6 +260,10 @@ def main():
                 compressed_pdfs.append(pdf)
 
         # Combine (and optionally split)
+        # For single-file input with --max-size, use original filename for parts
+        if args.max_size and len(pdfs) == 1:
+            output_path = output_path.parent / (pdfs[0].stem + output_path.suffix)
+
         if args.max_size:
             print(f"\nCombining {len(compressed_pdfs)} PDFs (max {args.max_size} MB per file)...")
         else:
